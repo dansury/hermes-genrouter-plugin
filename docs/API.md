@@ -1,62 +1,91 @@
-# Observed GenRouter API / Наблюдаемый API GenRouter
+# GenRouter API notes / Контракт GenRouter
 
-Inspected on **2026-10-13**. These routes and payloads are used by the public web cabinet; they are not a confirmed third-party compatibility contract.
+Updated 2026-10-13 from the developer's reply supplied by the repository owner.
+Account API stays experimental: no fixed external-plugin contract, management
+token or OAuth/device flow. Automated registration needs separate agreement.
 
-Sources:
+## Endpoints, session and CSRF
 
-- [Cabinet API client](https://genrouter.ru/dashboard/api.js?v=14)
-- [Registration/login frontend](https://genrouter.ru/dashboard/auth.js?v=10)
-- [Cabinet frontend](https://genrouter.ru/dashboard/cabinet.js?v=47)
-- [Registration page](https://genrouter.ru/dashboard/register)
-- [Hermes provider SDK](https://hermes-agent.nousresearch.com/docs/developer-guide/model-provider-plugin)
-- [Hermes plugin SDK](https://hermes-agent.nousresearch.com/docs/developer-guide/plugins)
+Cabinet: `https://genrouter.ru/dashboard/api`.
+Inference: `https://api.genrouter.ru/v1`.
+Anthropic SDK: `https://api.genrouter.ru` without `/v1`.
 
-## Cabinet session
+Cookie `genrouter_session` lasts 30 days without renewal.
+`GET /session` checks login. POST has CSRF checks. The standalone client sends
+same-origin Origin/Referer. Extension access on a different origin needs separate
+verification. The plugin never bypasses CSRF.
 
-Origin: `https://genrouter.ru`. Base path: `/dashboard/api`. The browser uses an HttpOnly session cookie. The adapter maintains its own cookie jar, not a browser cookie database. It sends same-origin `Origin`/`Referer` headers. No public stable OAuth/device-code integration contract, session refresh rules, or CSRF specification was found in the inspected frontend. If GenRouter changes these requirements, authentication can fail; the plugin must be updated rather than bypassing them.
+| Route | Contract |
+| --- | --- |
+| POST /auth/register | nickname, password; email attached separately |
+| POST /auth/login | nickname, password; confirmed email is sent in nickname too |
+| POST /auth/email/request | email |
+| POST /auth/email/confirm | six-digit code |
+| POST /auth/logout | revoke session |
+| GET /profile | wallet and current monetary key balances |
+| GET /models | cabinet catalog: text, image and video |
+| POST /keys | name, allocate_micro, operation_id; one-time secret |
+| POST /keys/{id}/fund | amount_micro, operation_id |
+| POST /keys/{id}/rotate | new secret; old one stops immediately |
+| GET /config | flags do not prove payment processing works |
 
-| Method + route | Request / observed shape | Implementation |
-| --- | --- | --- |
-| `POST /auth/register` | `{nickname, password}`; server creates a session | signup wizard |
-| `POST /auth/login` | `{nickname, password}` | hidden-password login |
-| `POST /auth/logout` | no JSON body | cabinet logout |
-| `POST /auth/email/request` | `{email}` | request/resend verification |
-| `POST /auth/email/confirm` | `{code}`; six digits | hidden-code confirmation |
-| `GET /profile` | `{user, keys, operations}` | safe account/key summaries |
-| `GET /models` | `{models, summary}`; rows have `id`, `name`, `owner`, `kind`, `context_length` | account model catalog |
-| `POST /keys` | `{name, allocate_micro, operation_id}`; response includes one-time `key` | create service-specific key |
-| `POST /keys/{id}/fund` | `{amount_micro, operation_id}` | confirmed wallet-to-key transfer |
-| `GET /config` | includes `payments_enabled` | payment capability status |
-| `POST /payments/topup` | `{amount_micro, provider, method}`; response may include `payment_url` | experimental hosted checkout |
+## Registration and recovery
 
-The frontend also exposes key rename/rotate/delete routes. This release deliberately does not automate key revocation or rotation: those can invalidate another application's credentials. Use the cabinet.
+Nickname: 4–32 Latin letters, digits and underscores. Password: 8–128 characters,
+at least one letter and digit. Email login requires confirmation. Terms acceptance
+is local: the API has no terms field. Avoid email-only signup.
 
-## Money and limits
+Email code: 15 minutes, five attempts; resend after a minute; five codes/hour per
+account. Server enforces these limits; the plugin never automatically resends.
 
-`user.wallet_micro` is the free account wallet. Key rows contain `balance_micro`, `reserved_micro`, `spent_micro`, `request_count`, `is_active`, `id`, `name`, `key_prefix`, and `created_at`. Amount fields can be JSON strings. The adapter converts exact decimal values without floating-point rounding.
+After failed email delivery or a lost signup response, check session, then login
+by nickname and request email again. Never register blindly twice. An uncertain
+signup marker is retained until successful login.
 
-`1_000_000` microdollars = USD `1`. `balance_micro` is available money; `reserved_micro` is in-flight reserved money. The website displays their sum, while the plugin exposes them separately to avoid treating reserved money as available.
+## Money, keys and retries
 
-RPM/TPM/concurrency limits, quota reset times, scoped management keys and a key-only balance endpoint were not present in the inspected client. Missing values are `null`/unknown, never zero, unlimited or invented token counts.
+`1 USD = 1,000,000 micro`. Wallet and key balances are separate. Allocate wallet
+funds to the key before generation. `balance_micro` is available money **after**
+reserving in-flight funds; do not subtract `reserved_micro` again.
 
-## Inference
+Ten active keys maximum; no separate scopes or expiry. Secrets are returned once
+and cannot be retrieved later. Explicit rotation recovers a lost secret and
+immediately invalidates the old one. Save the new secret privately first.
 
-`https://genrouter.ru/v1` accepts API-key Bearer authentication and `GET /models`. The website also publishes `https://api.genrouter.ru/v1`. The root plugin uses OpenAI Chat Completions; requests from `probe` go directly to `/chat/completions`, never through Hermes fallback providers.
+`GET /v1/key` still has legacy token fields. Do not use it for money: current sums
+are in cabinet `/profile`. Default RPM is 60, but a key can differ. Display RPM
+only if supplied. TPM, concurrency, daily/monthly budgets and reset dates stay
+unknown when absent.
 
-The supplied key's model listing was live-checked: the catalog included `anthropic/claude-opus-5`. A successful catalog request does not establish funded inference. HTTP `402` is surfaced as a billing/funding failure and never reported as a passing probe.
+Funding replay uses the **same operation_id, amount and key**. After timeout
+the plugin preserves all three and reuses the UUID for the identical transfer.
+Changed transfers are blocked while uncertain. Writes are never auto-retried.
 
-## Payments
+Creation accepts operation_id but cannot recover its original result. After
+a lost response, list keys; if one exists without its secret, confirm rotation.
+There is no operation-status API or recovery of old secrets. Uncertain rotation
+is blocked from blind retries: inspect the cabinet and contact support.
 
-The cabinet offers provider `platega`, method `2` (card/RUB) and `13` (crypto). Its public config reported `payments_enabled: true` during inspection, but the user reported payment processing is not yet operational. No checkout/payment was created to verify settlement.
+## Models and errors
 
-The adapter is therefore behind both `GENROUTER_ENABLE_CHECKOUT=1` and explicit amount confirmation. It returns a HTTPS checkout URL without following it. It never reads card data or declares settlement complete. Payment status polling, signed webhooks, idempotent checkout retry, refunds and automatic recharge need a confirmed contract and sandbox before implementation.
+Use exact current IDs. Inference `/v1/models` lists text models. A video card in
+the cabinet does not guarantee a working video flow. Protocol support depends
+on model; Responses currently supports `openai/*` only. This plugin uses Chat
+Completions. Tools, vision, reasoning and context need per-model verification.
 
-## Verification boundaries / Границы проверки
+Catalog access needs no money; generation needs sufficient key balance.
+402 can come from GenRouter or its supplier, with non-unified codes. Display
+the sanitized message and request_id rather than always recommending a deposit.
+Retain error code and Retry-After. RPM uses `rate_limit_exceeded` and
+`Retry-After`. Native Hermes errors are captured by its provider callback,
+without SDK exception bodies, payloads or prompts.
 
-- Native Hermes discovery/manifest/import/registration: checked locally.
-- Account workflows, key issuance, money precision, secret masking, redirects, payment gates: automated tests with simulated API responses.
-- Models and public configuration: live read-only checks.
-- Registration/email delivery/key writes/funding/checkout: **not live-tested**; no account credentials were supplied for these operations.
-- Cabinet compatibility: provisional until GenRouter confirms these endpoints are supported for integrations.
+## Payments and verification
 
-Регистрация действительно состоит из создания аккаунта по нику и паролю, затем отдельной привязки почты. Плагин автоматизирует запросы, но пользователь вводит пароль, принимает условия и вводит код из письма. Для надёжной фоновой автоматизации нужен официальный API с ограниченными правами и понятной семантикой повторов.
+Checkout stays disabled by default pending processing launch and API confirmation.
+The experimental adapter requires `GENROUTER_ENABLE_CHECKOUT=1` and amount
+confirmation; this is not a verified payment workflow.
+
+Account mutations/recovery and report submissions have mock tests. No live signup,
+transfer, rotation or payment was performed without a test account.
+A catalog check is not proof of successful paid generation.

@@ -9,6 +9,68 @@ import sys
 from .client import Client, GenRouterError, PORTAL, redact
 
 
+from .reports import (CONSENT_TEXT, capture, safe_capture, load_report, pending, render,
+                      submit, email_draft, personal_identity)
+from .updates import check_updates, start_checks
+
+
+def report_command(args):
+    if args.report_action == "list":
+        return [{"id": r["fingerprint"], "action": r["action"], "occurrences": r["occurrences"],
+                 "issue_url": r.get("issue_url")} for r in pending()]
+    if args.report_action == "new":
+        description = args.description
+        if not description:
+            if not sys.stdin.isatty():
+                raise ValueError("Provide --description for a manual report")
+            description = input("Что произошло и как повторить ошибку? ")
+        report = capture(description=description)
+    else:
+        report = load_report(getattr(args, "id", None))
+    body = render(report, getattr(args, "description", "") or "", getattr(args, "log_file", None))
+    print(body)
+    if args.report_action == "preview":
+        return {"report_id": report["fingerprint"], "sent": False}
+    # Every send previews this exact body, even with explicit --confirm.
+    if not getattr(args, "confirm", False):
+        if not sys.stdin.isatty() or input(CONSENT_TEXT + " [y/N] ").strip().lower() not in {"y", "yes", "д", "да"}:
+            return {"report_id": report["fingerprint"], "sent": False}
+    identity = args.identity
+    if identity == "ask":
+        username = personal_identity()
+        if username:
+            if not sys.stdin.isatty():
+                raise ValueError("GitHub is signed in; explicitly choose --identity personal or shared")
+            identity = "personal" if input(f"Отправить issue от вашего имени ({username})? [Y/n] ").strip().lower() not in {"n", "no", "нет"} else "shared"
+        else:
+            identity = "shared"
+    if identity == "email":
+        return email_draft(report, body)
+    try:
+        return submit(report, body, consent=True, identity=identity)
+    except Exception:
+        result = email_draft(report, body)
+        result["github_failed"] = True
+        result["hint"] += " GitHub may have received the report; next attempt checks duplicates first."
+        return result
+
+
+def error_notice(error, action):
+    report = safe_capture(error, action=action)
+    if report:
+        print("С вашей помощью мы быстрее сделаем продукт, который вам понравится. "
+              "Диагностика сохранена локально. Просмотр и отправка с вашего согласия: "
+              f"hermes genrouter report send --id {report['fingerprint']}", file=sys.stderr)
+    if report and sys.stdin.isatty() and sys.stderr.isatty():
+        from types import SimpleNamespace
+        try:
+            result = report_command(SimpleNamespace(report_action="send", id=report["fingerprint"],
+                                                   description="", log_file=None, confirm=False, identity="ask"))
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        except Exception:
+            pass  # Never replace the original error with a reporting failure.
+    return report
+
 def setup_parser(parser):
     commands = parser.add_subparsers(dest="genrouter_action", required=True)
     setup = commands.add_parser("setup", help="Sign in/register, confirm email, issue a key and choose a model")
@@ -56,6 +118,22 @@ def setup_parser(parser):
     checkout.add_argument("--amount-usd", required=True)
     checkout.add_argument("--method", choices=("card", "crypto"), required=True)
     checkout.add_argument("--confirm", action="store_true")
+    commands.add_parser("session", help="Check the 30-day cabinet session")
+    updates = commands.add_parser("updates", help="Check plugin updates (daily by default)")
+    updates.add_argument("--force", action="store_true")
+    rotate = sub.add_parser("rotate", help="Recover a lost secret; immediately invalidates the old key")
+    rotate.add_argument("--id", required=True)
+    rotate.add_argument("--confirm", action="store_true")
+    reports = commands.add_parser("report", help="Preview errors or report a problem with your consent")
+    report_sub = reports.add_subparsers(dest="report_action", required=True)
+    report_sub.add_parser("list")
+    for verb in ("preview", "send", "new"):
+        p = report_sub.add_parser(verb)
+        p.add_argument("--id")
+        p.add_argument("--description")
+        p.add_argument("--log-file", help="Optional diagnostic text log; always preview before sharing")
+        p.add_argument("--confirm", action="store_true", help="Explicit permission to send the displayed report")
+        p.add_argument("--identity", choices=("ask", "personal", "shared", "email"), default="ask")
     parser.set_defaults(func=handle)
 
 
@@ -108,6 +186,8 @@ def select_model(client, model):
 
 def execute(client, args):
     action = args.genrouter_action
+    if action == "session":
+        return client.session()
     if action == "signup":
         return signup(client, args)
     if action == "login":
@@ -150,6 +230,9 @@ def execute(client, args):
         client.use_key(args.key_name)
         return select_model(client, args.model)
     if action == "keys":
+        if args.key_action == "rotate":
+            confirmation("Rotate this key? Its old secret will immediately stop working.", args.confirm)
+            return client.rotate_key(args.id, confirmed=True)
         if args.key_action == "list":
             return client.key_balances()
         if args.key_action == "create":
@@ -173,11 +256,19 @@ def execute(client, args):
 
 def handle(args):
     try:
-        result = execute(Client(), args)
+        if args.genrouter_action == "report":
+            result = report_command(args)
+        elif args.genrouter_action == "updates":
+            result = check_updates(force=args.force)
+        else:
+            # Independent of cabinet login and never blocks the requested action on failure.
+            start_checks()
+            result = execute(Client(), args)
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
-    except (GenRouterError, ValueError, OSError, subprocess.CalledProcessError) as error:
+    except Exception as error:
         print(redact(str(error)), file=sys.stderr)
+        error_notice(error, args.genrouter_action)
         raise SystemExit(1) from None
 
 
