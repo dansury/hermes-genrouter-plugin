@@ -102,7 +102,7 @@ class Client:
             raise ValueError("Credentials may only be sent to HTTPS GenRouter endpoints")
         if parsed.username or parsed.password or parsed.port not in {None, 443}:
             raise ValueError("Invalid GenRouter endpoint")
-        headers = {"Accept": "application/json", "User-Agent": "hermes-genrouter-plugin/0.3.0"}
+        headers = {"Accept": "application/json", "User-Agent": "hermes-genrouter-plugin/0.3.1"}
         if cabinet:
             headers.update({"Origin": PORTAL, "Referer": PORTAL + "/dashboard/"})
         if api_key:
