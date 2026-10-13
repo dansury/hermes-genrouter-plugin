@@ -37,3 +37,15 @@ class ProviderTests(unittest.TestCase):
                 report = json.loads(raw)
                 self.assertEqual(report["diagnostics"]["request_id"], "request-example")
                 self.assertEqual(report["diagnostics"]["model"], "openai/example")
+
+    def test_isolated_host_error_without_traceback_is_recorded(self):
+        from account.reports import capture
+        with tempfile.TemporaryDirectory() as home:
+            opaque = SimpleNamespace(type_name="APIStatusError", text="SENSITIVE_SDK_BODY")
+            report = capture(opaque, action="inference", home=home,
+                             metadata={"status": 402, "request_id": "req-host"},
+                             message_override="APIStatusError: GenRouter inference failed")
+            self.assertEqual(report["exception"], "APIStatusError")
+            self.assertEqual(report["stack"], [])
+            self.assertEqual(report["diagnostics"]["request_id"], "req-host")
+            self.assertNotIn("SENSITIVE_SDK_BODY", json.dumps(report))

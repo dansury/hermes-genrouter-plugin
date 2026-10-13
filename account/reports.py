@@ -20,7 +20,7 @@ from .reporter_credential import shared_token
 from .sanitize import sanitize
 from .storage import hermes_home, private_write
 
-VERSION = "0.3.0"
+VERSION = "0.3.1"
 REPOSITORY = "dansury/hermes-genrouter-plugin"
 CONSENT_TEXT = ("С вашей помощью мы быстрее сделаем продукт, который вам понравится. "
                 "Можно поделиться этой ошибкой и очищенной диагностикой? "
@@ -137,7 +137,7 @@ def capture(error=None, action="manual", description="", home=None, metadata=Non
     frames = []
     if error is not None:
         frames = [{"file": Path(f.filename).name, "line": f.lineno, "function": f.name}
-                  for f in traceback.extract_tb(error.__traceback__)]
+                  for f in traceback.extract_tb(getattr(error, "__traceback__", None))]
     message = clean(message_override) if message_override is not None else (clean(str(error)) if error is not None else clean(description))
     details = {k: getattr(error, k, None) for k in
                ("status", "request_id", "error_code", "retry_after", "endpoint", "method")}
@@ -145,7 +145,7 @@ def capture(error=None, action="manual", description="", home=None, metadata=Non
     details.update({k: clean(v) for k, v in (metadata or {}).items()
                     if k in {"status", "request_id", "error_code", "retry_after", "endpoint", "model"}
                     and isinstance(v, (str, int))})
-    kind = type(error).__name__ if error is not None else "UserReport"
+    kind = getattr(error, "type_name", type(error).__name__) if error is not None else "UserReport"
     normalized = re.sub(r"\b[0-9a-f]{8}-[0-9a-f-]{27,}\b|\b\d+\b", "#", message, flags=re.I)
     signature = [action, kind, details["status"], details["error_code"], details["endpoint"],
                  [(f["file"], f["function"]) for f in frames], re.sub(r"Request ID: [A-Za-z0-9_.:-]+", "Request ID: #", normalized)]
