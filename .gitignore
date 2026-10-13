@@ -1,0 +1,14 @@
+.env
+.env.*
+!.env.example
+auth.json
+state.json
+*.session
+*.secrets
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.serena/
+dist/
+*.egg-info/
