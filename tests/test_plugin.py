@@ -140,7 +140,7 @@ class ClientTests(unittest.TestCase):
 
     def test_http_errors_never_echo_server_secrets_or_fallback(self):
         client = Client(MemoryStore())
-        error = HTTPError("https://genrouter.ru/v1/chat/completions", 402, "Payment", {}, io.BytesIO(b'private-body'))
+        error = HTTPError("https://api.genrouter.ru/v1/chat/completions", 402, "Payment", {}, io.BytesIO(b'private-body'))
         with patch.dict(os.environ, {"GENROUTER_API_KEY": "example-only-key"}):
             with patch("account.client.build_opener") as opener:
                 opener.return_value.open.side_effect = error
@@ -213,7 +213,8 @@ class IntegrationTests(unittest.TestCase):
             def register_cli_command(self, **kwargs):
                 self.cli.append(kwargs["name"])
         context = Context()
-        register(context)
+        with patch("account.updates.start_checks"):
+            register(context)
         self.assertEqual(context.cli, ["genrouter"])
         self.assertEqual(context.commands, ["genrouter"])
         self.assertEqual(len(context.tools), 3)

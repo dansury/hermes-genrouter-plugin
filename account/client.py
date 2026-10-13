@@ -16,18 +16,24 @@ from urllib.request import build_opener, HTTPCookieProcessor, HTTPRedirectHandle
 import uuid
 
 from .storage import SecretStore
+from .sanitize import sanitize
 
 
 PORTAL = "https://genrouter.ru"
-INFERENCE = "https://genrouter.ru/v1"
+INFERENCE = "https://api.genrouter.ru/v1"
 KEY_FIELDS = ("id", "name", "key_prefix", "is_active", "balance_micro",
               "reserved_micro", "spent_micro", "request_count", "created_at")
 
 
 class GenRouterError(RuntimeError):
-    def __init__(self, message, status=None):
+    def __init__(self, message, status=None, *, request_id=None, error_code=None, retry_after=None, endpoint=None, method=None):
         super().__init__(message)
         self.status = status
+        self.request_id = request_id
+        self.error_code = error_code
+        self.retry_after = retry_after
+        self.endpoint = endpoint
+        self.method = method
 
 
 class NoRedirects(HTTPRedirectHandler):
@@ -36,7 +42,7 @@ class NoRedirects(HTTPRedirectHandler):
 
 
 def redact(text):
-    return re.sub(r"sk-[A-Za-z0-9_.-]+", "[redacted]", str(text))
+    return sanitize(text)
 
 
 def usd_to_micro(value, positive=False):
@@ -62,7 +68,9 @@ def safe_key(row):
     result["available_usd"] = micro_to_usd(row.get("balance_micro"))
     result["reserved_usd"] = micro_to_usd(row.get("reserved_micro"))
     result["spent_usd"] = micro_to_usd(row.get("spent_micro"))
-    result["rate_limits"] = None  # This API exposes money, not RPM/TPM limits.
+    # Never infer a particular key's RPM from the default 60.
+    result["rate_limits"] = {"rpm": row.get("rpm"), "tpm": None, "concurrency": None,
+                             "daily_budget": None, "monthly_budget": None, "reset_at": None} if row.get("rpm") is not None else None
     return result
 
 
@@ -94,7 +102,7 @@ class Client:
             raise ValueError("Credentials may only be sent to HTTPS GenRouter endpoints")
         if parsed.username or parsed.password or parsed.port not in {None, 443}:
             raise ValueError("Invalid GenRouter endpoint")
-        headers = {"Accept": "application/json", "User-Agent": "hermes-genrouter-plugin/0.2.0"}
+        headers = {"Accept": "application/json", "User-Agent": "hermes-genrouter-plugin/0.3.0"}
         if cabinet:
             headers.update({"Origin": PORTAL, "Referer": PORTAL + "/dashboard/"})
         if api_key:
@@ -113,21 +121,46 @@ class Client:
                     raise GenRouterError("API response exceeds the 2 MB limit")
                 data = json.loads(raw) if raw else None
         except HTTPError as error:
-            # Do not echo a server-controlled body: it may contain credentials or account data.
+            # Retain only selected metadata; never store the raw body or request payload.
+            request_id = error.headers.get("x-request-id") or error.headers.get("request-id")
+            retry_after = error.headers.get("Retry-After")
+            message, code = None, None
+            try:
+                parsed_error = json.loads(error.read(65536))
+                detail = parsed_error.get("error", parsed_error) if isinstance(parsed_error, dict) else {}
+                if isinstance(detail, dict):
+                    message, code = detail.get("message"), detail.get("code")
+                    request_id = request_id or detail.get("request_id") or parsed_error.get("request_id")
+            except (ValueError, OSError, UnicodeDecodeError):
+                pass
+            finally:
+                error.close()
+            request_id = request_id if isinstance(request_id, str) and re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", request_id) else None
+            code = code if isinstance(code, str) and re.fullmatch(r"[A-Za-z0-9_.:-]{1,80}", code) else None
+            retry_after = retry_after if isinstance(retry_after, str) and re.fullmatch(r"[A-Za-z0-9 ,:-]{1,80}", retry_after) else None
             advice = {
-                401: "Sign in with 'hermes genrouter login' or check the inference API key.",
-                402: "Insufficient key balance or a billing restriction. Check key funding in the cabinet.",
-                403: "Access denied. The cabinet API may require a changed authentication contract.",
-                404: "Endpoint unavailable; the cabinet API may have changed or payments may be disabled.",
+                401: "Session expired or inference key rejected. Check session or sign in again.",
+                402: "Gateway or upstream billing error. The reason is not necessarily your key balance.",
+                403: "Access denied; account API authentication/CSRF compatibility needs review.",
+                404: "Endpoint unavailable; the experimental account contract may have changed.",
                 409: "Conflict. Check existing account/key state before retrying.",
-                429: "Rate limited. Wait before retrying; do not create keys to bypass limits.",
-            }.get(error.code, "Request failed. Check the GenRouter cabinet for details.")
-            raise GenRouterError(f"GenRouter HTTP {error.code}. {advice}", error.code) from None
+                429: "Rate limited. Observe Retry-After; do not create keys to bypass limits.",
+            }.get(error.code, "Request failed. Check the cabinet for details.")
+            if isinstance(message, str):
+                secrets = [api_key] + list(self.state.get("keys", {}).values()) + [cookie.value for cookie in self.jar]
+                if isinstance(payload, dict):
+                    secrets += [payload.get(k) for k in ("password", "code", "email", "key")]
+                advice += " Server: " + sanitize(message, secrets)[:2000]
+            if request_id:
+                advice += " Request ID: " + request_id
+            raise GenRouterError(f"GenRouter HTTP {error.code}. {advice}", error.code,
+                                 request_id=request_id, error_code=code, retry_after=retry_after,
+                                 endpoint=parsed.path, method=method) from None
         except (URLError, socket.timeout, TimeoutError):
             raise GenRouterError("Network request failed. A mutation may have completed; check the cabinet before retrying.") from None
         except (ValueError, UnicodeDecodeError):
             raise GenRouterError("GenRouter returned an unexpected response format") from None
-        if cabinet and method != "GET":
+        if cabinet and method != "GET" and parsed.path != "/dashboard/api/auth/login":
             self._save()
         return data
 
@@ -139,11 +172,23 @@ class Client:
     def register_account(self, nickname, password, accepted_terms=False):
         if not accepted_terms:
             raise ValueError("Accept GenRouter's terms before creating an account")
-        if not nickname.strip() or len(password) < 8:
-            raise ValueError("Provide a nickname and a password of at least eight characters")
+        if not re.fullmatch(r"[A-Za-z0-9_]{4,32}", nickname):
+            raise ValueError("Nickname: 4–32 Latin letters, digits or underscores")
+        if not 8 <= len(password) <= 128 or not re.search(r"[A-Za-z]", password) or not re.search(r"[0-9]", password):
+            raise ValueError("Password: 8–128 characters, including a letter and a digit")
         self._check_account(nickname)
-        result = self.request("/auth/register", "POST", {"nickname": nickname.strip(), "password": password})
-        self.state["nickname"] = nickname.strip()
+        pending = self.state.get("registration_pending")
+        if pending:
+            raise ValueError("A signup response was lost. Check session, then login by nickname; do not repeat signup.")
+        self.state["registration_pending"] = nickname
+        self._save()
+        try:
+            result = self.request("/auth/register", "POST", {"nickname": nickname, "password": password})
+        except Exception:
+            self._save()  # Preserve a session cookie even when the response body was lost.
+            raise
+        self.state["nickname"] = nickname
+        self.state.pop("registration_pending", None)
         self._save()
         return result
 
@@ -153,9 +198,22 @@ class Client:
             raise ValueError("This Hermes profile already stores another account's keys. Use a separate Hermes profile for a different account.")
 
     def login(self, nickname, password):
-        self._check_account(nickname)
-        result = self.request("/auth/login", "POST", {"nickname": nickname, "password": password})
-        self.state["nickname"] = nickname.strip()
+        if "@" not in nickname:
+            self._check_account(nickname)
+        old_cookies = list(self.jar)
+        try:
+            result = self.request("/auth/login", "POST", {"nickname": nickname, "password": password})
+            canonical = self.profile()["user"].get("nickname") if "@" in nickname else nickname.strip()
+            if not isinstance(canonical, str) or not canonical:
+                raise GenRouterError("Login response has no canonical account nickname")
+            self._check_account(canonical)
+        except Exception:
+            self.jar.clear()
+            for cookie in old_cookies:
+                self.jar.set_cookie(cookie)
+            raise
+        self.state["nickname"] = canonical
+        self.state.pop("registration_pending", None)
         self._save()
         return result
 
@@ -181,6 +239,37 @@ class Client:
             raise GenRouterError("Unexpected profile schema; account API compatibility needs review")
         return data
 
+    def session(self):
+        data = self.request("/session")
+        authenticated = data.get("authenticated") if isinstance(data, dict) else None
+        if not isinstance(authenticated, bool):
+            authenticated = None
+        return {"session_checked": True, "authenticated": authenticated,
+                "session_duration_days": 30, "automatic_renewal": False}
+
+    def rotate_key(self, key_id, confirmed=False):
+        if not confirmed:
+            raise ValueError("Rotation immediately invalidates the old secret; explicitly confirm.")
+        identifier = str(key_id)
+        rows = self.profile()["keys"]
+        row = next((r for r in rows if str(r.get("id")) == identifier), None)
+        if row is None or not re.fullmatch(r"[A-Za-z0-9_-]+", identifier):
+            raise ValueError("Select a key belonging to this account")
+        if self.state.get("rotation_pending"):
+            raise ValueError("A rotation response was lost. Inspect the cabinet; do not retry rotation blindly.")
+        self.state["rotation_pending"] = identifier
+        self._save()
+        data = self.request(f"/keys/{identifier}/rotate", "POST")
+        if not isinstance(data, dict) or not isinstance(data.get("key"), str) or not data["key"]:
+            raise GenRouterError("Rotation returned no secret; inspect the cabinet before any further rotation.")
+        name = row["name"]
+        self.state.setdefault("keys", {})[name] = data["key"]
+        self.state.pop("rotation_pending", None)
+        if self.state.get("last_key_operation", {}).get("name") == name:
+            self.state["last_key_operation"]["pending"] = False
+        self._save()
+        return {"rotated": True, "name": name, "secret_saved": True, "old_secret_invalidated": True}
+
     def status(self):
         profile = self.profile()
         user = profile["user"]
@@ -194,18 +283,24 @@ class Client:
     def create_key(self, name, allocate_usd="0", operation_id=None):
         if not name.strip() or len(name) > 64:
             raise ValueError("Key name must contain 1 to 64 characters")
-        if any(row.get("name") == name for row in self.profile()["keys"]):
+        rows = self.profile()["keys"]
+        if sum(row.get("is_active") is not False for row in rows) >= 10:
+            raise ValueError("GenRouter permits at most ten active keys per account")
+        if self.state.get("last_key_operation", {}).get("pending"):
+            raise ValueError("A key creation response was lost. List keys first; recover its secret by confirmed rotation, not another creation.")
+        if any(row.get("name") == name for row in rows):
             raise ValueError("A key with this name already exists; use another service-specific name")
         allocation = usd_to_micro(allocate_usd)
         operation_id = str(uuid.UUID(operation_id)) if operation_id else str(uuid.uuid4())
         # Save the id before the request so an ambiguous network failure can be investigated.
-        self.state["last_key_operation"] = {"operation_id": operation_id, "name": name}
+        self.state["last_key_operation"] = {"operation_id": operation_id, "name": name, "pending": True}
         self._save()
         data = self.request("/keys", "POST", {"name": name, "allocate_micro": allocation,
                                                "operation_id": operation_id})
         if not isinstance(data, dict) or not isinstance(data.get("key"), str) or not data["key"]:
             raise GenRouterError("Key creation response has no key. Check the cabinet before retrying.")
         self.state.setdefault("keys", {})[name] = data["key"]
+        self.state["last_key_operation"]["pending"] = False
         self._save()  # One-time key is persisted before optional setup/export.
         return {"created": True, "name": name, "operation_id": operation_id,
                 "allocated_usd": micro_to_usd(allocation), "secret_saved": True}
@@ -231,10 +326,19 @@ class Client:
         identifier = str(key_id)
         if not re.fullmatch(r"[A-Za-z0-9_-]+", identifier):
             raise ValueError("Invalid key id")
+        previous = self.state.get("last_fund_operation", {})
+        if previous.get("pending"):
+            if previous.get("key_id") != identifier or previous.get("amount_micro") != amount or (operation_id and previous.get("operation_id") != operation_id):
+                raise ValueError("Uncertain transfer: repeat the same key, amount and operation_id before starting another transfer.")
+            operation_id = previous["operation_id"]
         operation_id = str(uuid.UUID(operation_id)) if operation_id else str(uuid.uuid4())
-        self.state["last_fund_operation"] = {"operation_id": operation_id, "key_id": identifier}
+        if previous.get("operation_id") == operation_id and (previous.get("key_id") != identifier or previous.get("amount_micro") != amount):
+            raise ValueError("An operation_id cannot be reused for another amount or key")
+        self.state["last_fund_operation"] = {"operation_id": operation_id, "key_id": identifier, "amount_micro": amount, "pending": True}
         self._save()
         self.request(f"/keys/{identifier}/fund", "POST", {"amount_micro": amount, "operation_id": operation_id})
+        self.state["last_fund_operation"]["pending"] = False
+        self._save()
         return {"funded": True, "key_id": identifier, "amount_usd": micro_to_usd(amount), "operation_id": operation_id}
 
     def models(self):
