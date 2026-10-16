@@ -8,6 +8,11 @@
 
 Для установки Hermes, выбора провайдера и справочника встроенных провайдеров используйте официальную [документацию Hermes по LLM-провайдерам](https://hermes-agent.nousresearch.com/docs/integrations/providers). GenRouter не аффилирован с Nous Research.
 
+Для [каталога плагинов Hermes](https://hermes-agent.nousresearch.com/docs/plugins)
+есть минимальная сборка `catalog/`: она регистрирует только провайдера GenRouter
+и передаёт Hermes работу с `GENROUTER_API_KEY`. В ней нет проверки обновлений,
+отправки диагностики и функций управления аккаунтом.
+
 ## Установка
 
 Нужен установленный Hermes Agent. Локально проверено с Hermes **0.21.6**, Python **3.11**, Windows. CI проверяет клиент на Windows/Linux с Python 3.11–3.13.
