@@ -1,8 +1,12 @@
-# GenRouter for Hermes Agent
+# GenRouter for [Hermes Agent](https://github.com/NousResearch/hermes-agent)
 
-[Русская инструкция](README.ru.md) · [API notes](docs/API.md)
+[Русская инструкция](README.ru.md) · [API notes](docs/API.md) · [Hermes provider documentation](https://hermes-agent.nousresearch.com/docs/integrations/providers)
 
-Independent Hermes plugins for [GenRouter](https://genrouter.ru). This repository contains the provider code and an account-management companion, not just a configuration example.
+Independent [Hermes Agent](https://github.com/NousResearch/hermes-agent) plugins for [GenRouter](https://genrouter.ru). This repository contains the provider code and an account-management companion, not just a configuration example.
+
+## Hermes Agent integration
+
+This is a third-party provider plugin for [Hermes Agent](https://github.com/NousResearch/hermes-agent). For Hermes installation, provider selection, and the built-in provider reference, see the official [LLM and Model Providers guide](https://hermes-agent.nousresearch.com/docs/integrations/providers). GenRouter is not affiliated with Nous Research.
 
 ## Features and status
 
