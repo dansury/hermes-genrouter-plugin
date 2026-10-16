@@ -1,8 +1,12 @@
-# GenRouter для Hermes Agent
+# GenRouter для [Hermes Agent](https://github.com/NousResearch/hermes-agent)
 
-[English documentation](README.md) · [Описание API](docs/API.md)
+[English documentation](README.md) · [Описание API](docs/API.md) · [Документация Hermes по провайдерам](https://hermes-agent.nousresearch.com/docs/integrations/providers)
 
-Репозиторий содержит код провайдера **GenRouter** для списка вендоров Hermes и companion-плагин: регистрация, подтверждение почты, ключи, остатки и выбор моделей.
+Репозиторий содержит независимый сторонний плагин провайдера **GenRouter** для [Hermes Agent](https://github.com/NousResearch/hermes-agent) и companion-плагин: регистрация, подтверждение почты, ключи, остатки и выбор моделей.
+
+## Интеграция с Hermes Agent
+
+Для установки Hermes, выбора провайдера и справочника встроенных провайдеров используйте официальную [документацию Hermes по LLM-провайдерам](https://hermes-agent.nousresearch.com/docs/integrations/providers). GenRouter не аффилирован с Nous Research.
 
 ## Установка
 
