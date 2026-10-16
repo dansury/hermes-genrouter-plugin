@@ -8,6 +8,12 @@ Independent [Hermes Agent](https://github.com/NousResearch/hermes-agent) plugins
 
 This is a third-party provider plugin for [Hermes Agent](https://github.com/NousResearch/hermes-agent). For Hermes installation, provider selection, and the built-in provider reference, see the official [LLM and Model Providers guide](https://hermes-agent.nousresearch.com/docs/integrations/providers). GenRouter is not affiliated with Nous Research.
 
+The repository also contains a minimal `catalog/` package intended for the
+[Hermes Plugin Catalog](https://hermes-agent.nousresearch.com/docs/plugins).
+It registers only the GenRouter provider and delegates `GENROUTER_API_KEY`
+handling to Hermes; it has no update checker, diagnostic reporter, or
+account-management features.
+
 ## Features and status
 
 | Feature | Status |
