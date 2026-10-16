@@ -10,6 +10,23 @@ from unittest.mock import patch
 
 
 class ProviderTests(unittest.TestCase):
+    def test_catalog_package_registers_provider_without_account_features(self):
+        provider_module, base = ModuleType("providers"), ModuleType("providers.base")
+        seen = []
+        provider_module.register_provider = seen.append
+        base.ProviderProfile = lambda **kwargs: SimpleNamespace(**kwargs)
+        root = Path(__file__).resolve().parents[1]
+        spec = importlib.util.spec_from_file_location("_genrouter_catalog_provider", root / "catalog" / "__init__.py")
+        module = importlib.util.module_from_spec(spec)
+        with patch.dict(sys.modules, {"providers": provider_module, "providers.base": base}):
+            spec.loader.exec_module(module)
+
+        profile = seen[0]
+        self.assertEqual(profile.name, "genrouter-ru")
+        self.assertEqual(profile.env_vars, ("GENROUTER_API_KEY",))
+        self.assertEqual(profile.base_url, "https://api.genrouter.ru/v1")
+        self.assertFalse(hasattr(profile, "classify_api_error"))
+
     def test_native_callback_preserves_debug_metadata_and_excludes_sdk_body(self):
         provider_module, base = ModuleType("providers"), ModuleType("providers.base")
         seen = []
