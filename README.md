@@ -95,6 +95,18 @@ hermes genrouter keys show --name Cursor --reveal
 
 Full keys are revealed only by explicit `--reveal` in an interactive local terminal. Creating a `Cursor` key does not switch Hermes' key. `keys use --name Hermes` installs a locally stored key for Hermes.
 
+Each model returned by `hermes genrouter models`, `/genrouter models`, or
+`genrouter_models` includes a readable `price_display` and structured `pricing`.
+Approximate USD rates come from the live GenRouter catalog, like the
+[cabinet model cards](https://genrouter.ru/dashboard/models): input, cached
+input (when supplied), and output per **1 million tokens**; images per image
+and video per second. For example, a catalog input rate of 21000 microdollars
+is shown as `Input ≈ $0.021 / 1M tokens`. This is a conversion example, not a
+fixed model quote. Rates can change; these are estimates, not a final charge.
+If the API-key-only catalog omits rates, the row says `Price unavailable`.
+Use `hermes genrouter login` for the cabinet catalog or check the cabinet;
+the plugin never guesses a missing price or cache discount.
+
 New keys get **zero balance by default**. To allocate existing wallet funds:
 
 ```shell

@@ -68,6 +68,16 @@ is blocked from blind retries: inspect the cabinet and contact support.
 
 ## Models and errors
 
+`Client.models()` retains the cabinet's live rate fields as allowlisted
+`pricing` values in USD strings and a readable `price_display`. Token prices
+use `input_micro_per_million`, `cached_input_micro_per_million`, and
+`output_micro_per_million`; media prices use `media_micro_per_unit` with
+`media_unit` (`image` or `second`). Divide microdollars by 1,000,000 without
+rounding. Missing, invalid, or unsupported rates are unavailable, never free.
+The inference catalog may omit prices; log into the cabinet rather than
+assuming a tariff or a cache multiplier. See the
+[price contract](../spec/modules/model-prices.md).
+
 Use exact current IDs. Inference `/v1/models` lists text models. A video card in
 the cabinet does not guarantee a working video flow. Protocol support depends
 on model; Responses currently supports `openai/*` only. This plugin uses Chat

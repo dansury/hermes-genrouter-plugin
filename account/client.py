@@ -63,6 +63,48 @@ def micro_to_usd(value):
     return format(Decimal(str(value)) / 1_000_000, "f")
 
 
+def safe_model(row):
+    """Keep public catalog fields and the same USD billing units as the cabinet."""
+    result = {field: row[field] for field in
+              ("id", "name", "owner", "kind", "context_length") if field in row}
+    prices = {"currency": "USD", "approximate": True}
+    labels = []
+
+    def rate(field):
+        value = row.get(field)
+        # Rates are integer microdollars, sometimes serialized as digit strings.
+        if isinstance(value, bool) or not isinstance(value, (int, str)):
+            return None
+        if not re.fullmatch(r"[0-9]{1,18}", str(value)):
+            return None
+        return micro_to_usd(value)
+
+    if row.get("media_micro_per_unit") is not None:
+        unit = row.get("media_unit")
+        value = rate("media_micro_per_unit")
+        if unit in ("image", "second") and value is not None:
+            prices["usd_per_" + unit] = value
+            labels.append(f"≈ ${value} / {unit}")
+    else:
+        for field, name, label in (
+            ("input_micro_per_million", "input", "Input"),
+            ("cached_input_micro_per_million", "cached_input", "Cache"),
+            ("output_micro_per_million", "output", "Output"),
+        ):
+            value = rate(field)
+            if value is not None:
+                prices[name + "_usd_per_million_tokens"] = value
+                labels.append(f"{label} ≈ ${value} / 1M tokens")
+            elif name != "cached_input":
+                labels.append(f"{label}: price unavailable")
+    result["pricing"] = prices
+    has_rate = len(prices) > 2
+    result["price_display"] = "; ".join(labels) if has_rate else (
+        "Price unavailable; sign in with hermes genrouter login or check "
+        "https://genrouter.ru/dashboard/models")
+    return result
+
+
 def safe_key(row):
     result = {field: row[field] for field in KEY_FIELDS if field in row}
     result["available_usd"] = micro_to_usd(row.get("balance_micro"))
@@ -353,8 +395,8 @@ class Client:
             rows = data.get("data") if isinstance(data, dict) else None
         if not isinstance(rows, list):
             raise GenRouterError("Unexpected model catalog schema")
-        return [{field: row[field] for field in ("id", "name", "owner", "kind", "context_length") if field in row}
-                for row in rows if isinstance(row, dict) and isinstance(row.get("id"), str)]
+        return [safe_model(row) for row in rows
+                if isinstance(row, dict) and isinstance(row.get("id"), str)]
 
     def payment_status(self):
         data = self.request("/config")
