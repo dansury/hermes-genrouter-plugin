@@ -38,4 +38,4 @@ Use only the standard library. The minimal `catalog/` provider stays unchanged.
 - [x] T002 [FR-002–005] Add offline regression cases in `tests/test_model_prices.py`.
 - [x] T003 [FR-004] Explain rates and unavailable prices in `README.md`,
   `README.ru.md`, and `docs/API.md`; link this contract from `spec/index.md`.
-- [ ] T004 Run the full Python suite and the Windows/Linux CI matrix.
+- [x] T004 Run the full Python suite and the Windows/Linux CI matrix.
