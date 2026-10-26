@@ -1,6 +1,6 @@
 name: genrouter-ru
 kind: model-provider
-version: 0.3.1
+version: 0.3.2
 description: GenRouter.ru - OpenAI-compatible inference
 author: dansury
 license: MIT

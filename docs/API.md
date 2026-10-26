@@ -29,7 +29,11 @@ verification. The plugin never bypasses CSRF.
 | POST /keys/{id}/rotate | new secret; old one stops immediately |
 | GET /config | flags do not prove payment processing works |
 
-## Registration and recovery
+## Referral attribution
+
+Public GenRouter links use `https://genrouter.ru/?ref=d97a170843`. The landing server sets a secure, same-site `linali_ref` cookie for this referral (observed on 2026-10-26). Before a new account registration, the client supplies that cookie for `genrouter.ru` and `/`; it does not add referral fields to account JSON or API endpoint URLs. Login and already-created accounts are not reassigned. The server decides whether attribution is eligible; account creation is never performed just to test it.
+
+## Registration recovery
 
 Nickname: 4–32 Latin letters, digits and underscores. Password: 8–128 characters,
 at least one letter and digit. Email login requires confirmation. Terms acceptance

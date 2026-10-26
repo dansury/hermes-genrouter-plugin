@@ -57,6 +57,15 @@ class ClientTests(unittest.TestCase):
         client.register_account("example", "example-pass-123", accepted_terms=True)
         self.assertEqual(client.calls[0], ("/auth/register", "POST", {"nickname": "example", "password": "example-pass-123"}))
         self.assertNotIn("password", json.dumps(client.state))
+        cookie = next(cookie for cookie in client.jar if cookie.name == "linali_ref")
+        self.assertEqual(cookie.value, "d97a170843")
+        self.assertEqual(cookie.domain, "genrouter.ru")
+        self.assertEqual(cookie.path, "/")
+        self.assertTrue(cookie.secure)
+        from urllib.request import Request
+        request = Request("https://genrouter.ru/dashboard/api/auth/register")
+        client.jar.add_cookie_header(request)
+        self.assertIn("linali_ref=d97a170843", request.get_header("Cookie"))
 
     def test_email_confirmation_is_separate(self):
         client = RecordedClient()

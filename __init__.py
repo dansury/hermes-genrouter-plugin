@@ -1,7 +1,6 @@
 """GenRouter.ru provider profile for Hermes Agent."""
 
-from providers import register_provider
-from providers.base import ProviderProfile
+from .catalog import profile
 
 
 def observe_error(error, **context):
@@ -29,18 +28,4 @@ def observe_error(error, **context):
     return None
 
 
-register_provider(
-    ProviderProfile(
-        name="genrouter-ru",
-        aliases=("genrouter.ru",),
-        api_mode="chat_completions",
-        classify_api_error=observe_error,
-        display_name="GenRouter",
-        description="GenRouter.ru - OpenAI-compatible inference",
-        signup_url="https://genrouter.ru/",
-        env_vars=("GENROUTER_API_KEY",),
-        base_url="https://api.genrouter.ru/v1",
-        auth_type="api_key",
-        fallback_models=("anthropic/claude-opus-5",),
-    )
-)
+profile.classify_api_error = observe_error

@@ -26,6 +26,19 @@ hermes plugins install https://github.com/dansury/hermes-genrouter-plugin/tree/m
 
 Ранее установленный вручную `plugins/model-providers/genrouter-ru` использует тот же адрес и переменную ключа. Запись `providers.genrouter` — отдельный custom endpoint; выбирайте вендора **GenRouter / genrouter-ru**.
 
+## Обновление и полный список моделей
+
+Обновите оба установленных пакета и нажмите **Refresh models** в выборе модели Hermes:
+
+```shell
+hermes plugins update genrouter-ru
+hermes plugins update genrouter-account
+```
+
+Провайдер загружает актуальные текстовые модели с ключом, который передаёт Hermes. Единственный Opus — резервный список при недоступности каталога: проверьте ключ активного профиля и обновите список. Обработчики инструментов принимают позиционный аргумент Hermes и дополнительные поля контекста. Оба варианта установки провайдера используют один механизм загрузки каталога.
+
+Новые регистрации передают рефералку [GenRouter](https://genrouter.ru/?ref=d97a170843) через cookie сервера. У уже созданных аккаунтов сохраняется прежняя привязка: плагин не может изменить её задним числом.
+
 ## Существующий ключ
 
 ```shell
@@ -91,7 +104,7 @@ hermes genrouter keys fund --id KEY_ID --amount-usd 5 --confirm
 В `hermes genrouter models`, `/genrouter models` и `genrouter_models` рядом
 с каждой моделью есть примерная цена (`price_display`) и ставки (`pricing`).
 Данные берутся из текущего каталога GenRouter, как в
-[карточках кабинета](https://genrouter.ru/dashboard/models): вход, кэш
+[карточках кабинета](https://genrouter.ru/dashboard/models?ref=d97a170843): вход, кэш
 (если ставка передана) и выход в USD за **1 млн токенов**; изображения — за
 изображение, видео — за секунду. Например, входная ставка 21000 микродолларов
 отображается как `Input ≈ $0.021 / 1M tokens`. Это пример пересчёта единиц,
