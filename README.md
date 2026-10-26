@@ -2,7 +2,7 @@
 
 [Русская инструкция](README.ru.md) · [API notes](docs/API.md) · [Hermes provider documentation](https://hermes-agent.nousresearch.com/docs/integrations/providers)
 
-Independent [Hermes Agent](https://github.com/NousResearch/hermes-agent) plugins for [GenRouter](https://genrouter.ru). This repository contains the provider code and an account-management companion, not just a configuration example.
+Independent [Hermes Agent](https://github.com/NousResearch/hermes-agent) plugins for [GenRouter](https://genrouter.ru/?ref=d97a170843). This repository contains the provider code and an account-management companion, not just a configuration example.
 
 ## Hermes Agent integration
 
@@ -44,6 +44,19 @@ hermes plugins install https://github.com/dansury/hermes-genrouter-plugin/tree/m
 The root registers the `genrouter-ru` provider. The `account/` package adds `hermes genrouter`, `/genrouter`, and read-only tools. For another Hermes profile, prefix commands with `hermes -p <profile>`.
 
 A prior manual `plugins/model-providers/genrouter-ru` installation registers the same provider with the same endpoint and key variable; it can be retained during migration. A legacy `providers.genrouter` custom entry is a separate endpoint.
+
+## Live model list and upgrades
+
+Update both installed packages, then use **Refresh models** in the Hermes model picker:
+
+```shell
+hermes plugins update genrouter-ru
+hermes plugins update genrouter-account
+```
+
+The provider loads the live chat catalog using the key supplied by Hermes. A lone Opus entry is the offline fallback: check the active profile key and refresh the catalog. Account tools accept the Hermes positional arguments mapping and optional context fields. The catalog package and full provider share the same discovery implementation.
+
+New account registrations carry the referral from [this GenRouter signup link](https://genrouter.ru/?ref=d97a170843) using the server referral cookie. Existing accounts keep their attribution; the plugin cannot retroactively change it.
 
 ## Existing API key
 
@@ -98,7 +111,7 @@ Full keys are revealed only by explicit `--reveal` in an interactive local termi
 Each model returned by `hermes genrouter models`, `/genrouter models`, or
 `genrouter_models` includes a readable `price_display` and structured `pricing`.
 Approximate USD rates come from the live GenRouter catalog, like the
-[cabinet model cards](https://genrouter.ru/dashboard/models): input, cached
+[cabinet model cards](https://genrouter.ru/dashboard/models?ref=d97a170843): input, cached
 input (when supplied), and output per **1 million tokens**; images per image
 and video per second. For example, a catalog input rate of 21000 microdollars
 is shown as `Input ≈ $0.021 / 1M tokens`. This is a conversion example, not a

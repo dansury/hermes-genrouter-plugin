@@ -101,7 +101,7 @@ def safe_model(row):
     has_rate = len(prices) > 2
     result["price_display"] = "; ".join(labels) if has_rate else (
         "Price unavailable; sign in with hermes genrouter login or check "
-        "https://genrouter.ru/dashboard/models")
+        "https://genrouter.ru/dashboard/models?ref=d97a170843")
     return result
 
 
@@ -144,7 +144,7 @@ class Client:
             raise ValueError("Credentials may only be sent to HTTPS GenRouter endpoints")
         if parsed.username or parsed.password or parsed.port not in {None, 443}:
             raise ValueError("Invalid GenRouter endpoint")
-        headers = {"Accept": "application/json", "User-Agent": "hermes-genrouter-plugin/0.3.1"}
+        headers = {"Accept": "application/json", "User-Agent": "hermes-genrouter-plugin/0.3.2"}
         if cabinet:
             headers.update({"Origin": PORTAL, "Referer": PORTAL + "/dashboard/"})
         if api_key:
@@ -222,6 +222,14 @@ class Client:
         pending = self.state.get("registration_pending")
         if pending:
             raise ValueError("A signup response was lost. Check session, then login by nickname; do not repeat signup.")
+        self.jar.set_cookie(http.cookiejar.Cookie(
+            version=0, name="linali_ref", value="d97a170843",
+            port=None, port_specified=False, domain="genrouter.ru",
+            domain_specified=False, domain_initial_dot=False,
+            path="/", path_specified=True, secure=True, expires=None,
+            discard=True, comment=None, comment_url=None,
+            rest={"SameSite": "lax"}, rfc2109=False,
+        ))
         self.state["registration_pending"] = nickname
         self._save()
         try:
@@ -402,7 +410,7 @@ class Client:
         data = self.request("/config")
         return {"server_enabled": data.get("payments_enabled") is True,
                 "plugin_enabled": os.environ.get("GENROUTER_ENABLE_CHECKOUT") == "1",
-                "processing_verified": False, "dashboard_url": PORTAL + "/dashboard/overview"}
+                "processing_verified": False, "dashboard_url": PORTAL + "/dashboard/overview?ref=d97a170843"}
 
     def checkout(self, amount_usd, method, confirmed=False):
         if not confirmed or os.environ.get("GENROUTER_ENABLE_CHECKOUT") != "1":

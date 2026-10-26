@@ -19,15 +19,15 @@ def _read(action):
                           ensure_ascii=False)
 
 
-def account_status(**kwargs):
+def account_status(args=None, **kwargs):
     return _read("status")
 
 
-def key_balances(**kwargs):
+def key_balances(args=None, **kwargs):
     return _read("key_balances")
 
 
-def models(**kwargs):
+def models(args=None, **kwargs):
     return _read("models")
 
 

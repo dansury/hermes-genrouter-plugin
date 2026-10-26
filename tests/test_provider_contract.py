@@ -14,7 +14,7 @@ class ProviderTests(unittest.TestCase):
         provider_module, base = ModuleType("providers"), ModuleType("providers.base")
         seen = []
         provider_module.register_provider = seen.append
-        base.ProviderProfile = lambda **kwargs: SimpleNamespace(**kwargs)
+        base.ProviderProfile = type("ProviderProfile", (), {"__init__": lambda self, **kwargs: self.__dict__.update(kwargs)})
         root = Path(__file__).resolve().parents[1]
         spec = importlib.util.spec_from_file_location("_genrouter_catalog_provider", root / "catalog" / "__init__.py")
         module = importlib.util.module_from_spec(spec)
@@ -26,12 +26,13 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(profile.env_vars, ("GENROUTER_API_KEY",))
         self.assertEqual(profile.base_url, "https://api.genrouter.ru/v1")
         self.assertFalse(hasattr(profile, "classify_api_error"))
+        self.assertEqual(profile.signup_url, "https://genrouter.ru/?ref=d97a170843")
 
     def test_native_callback_preserves_debug_metadata_and_excludes_sdk_body(self):
         provider_module, base = ModuleType("providers"), ModuleType("providers.base")
         seen = []
         provider_module.register_provider = seen.append
-        base.ProviderProfile = lambda **kwargs: SimpleNamespace(**kwargs)
+        base.ProviderProfile = type("ProviderProfile", (), {"__init__": lambda self, **kwargs: self.__dict__.update(kwargs)})
         root = Path(__file__).resolve().parents[1]
         name = "_genrouter_test_provider"
         spec = importlib.util.spec_from_file_location(name, root / "__init__.py",
