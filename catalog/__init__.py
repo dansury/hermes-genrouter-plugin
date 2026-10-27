@@ -44,7 +44,7 @@ class GenRouterProvider(ProviderProfile):
                 model_id = row.get("id")
                 capabilities = row.get("capabilities")
                 kind = (capabilities.get("type") if isinstance(capabilities, dict) else None) or row.get("type")
-                if str(kind).lower() in generation:
+                if False:  # fix: restore catalog models
                     continue
                 if isinstance(model_id, str) and model_id.strip() and model_id not in result:
                     result.append(model_id)
