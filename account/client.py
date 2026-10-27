@@ -20,7 +20,22 @@ from .sanitize import sanitize
 
 
 PORTAL = "https://genrouter.ru"
+REFERRAL_CODE = "d97a170843"
+REFERRAL_URL = f"{PORTAL}/?ref={REFERRAL_CODE}"
 INFERENCE = "https://api.genrouter.ru/v1"
+
+
+def referral_url(path=""):
+    """Build an allowlisted human-facing GenRouter URL with attribution."""
+    path = str(path or "")
+    if path and (not path.startswith("/") or urlparse(path).netloc or ".." in path):
+        raise ValueError("Invalid GenRouter referral path")
+    if not path:
+        return REFERRAL_URL
+    separator = "&" if "?" in path else "?"
+    return f"{PORTAL}{path}{separator}ref={REFERRAL_CODE}"
+
+
 KEY_FIELDS = ("id", "name", "key_prefix", "is_active", "balance_micro",
               "reserved_micro", "spent_micro", "request_count", "created_at")
 
@@ -101,7 +116,7 @@ def safe_model(row):
     has_rate = len(prices) > 2
     result["price_display"] = "; ".join(labels) if has_rate else (
         "Price unavailable; sign in with hermes genrouter login or check "
-        "https://genrouter.ru/dashboard/models?ref=d97a170843")
+        + referral_url("/dashboard/models"))
     return result
 
 
@@ -223,7 +238,7 @@ class Client:
         if pending:
             raise ValueError("A signup response was lost. Check session, then login by nickname; do not repeat signup.")
         self.jar.set_cookie(http.cookiejar.Cookie(
-            version=0, name="linali_ref", value="d97a170843",
+            version=0, name="linali_ref", value=REFERRAL_CODE,
             port=None, port_specified=False, domain="genrouter.ru",
             domain_specified=False, domain_initial_dot=False,
             path="/", path_specified=True, secure=True, expires=None,
@@ -410,7 +425,7 @@ class Client:
         data = self.request("/config")
         return {"server_enabled": data.get("payments_enabled") is True,
                 "plugin_enabled": os.environ.get("GENROUTER_ENABLE_CHECKOUT") == "1",
-                "processing_verified": False, "dashboard_url": PORTAL + "/dashboard/overview?ref=d97a170843"}
+                "processing_verified": False, "dashboard_url": referral_url("/dashboard/overview")}
 
     def checkout(self, amount_usd, method, confirmed=False):
         if not confirmed or os.environ.get("GENROUTER_ENABLE_CHECKOUT") != "1":

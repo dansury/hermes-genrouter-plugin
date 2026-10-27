@@ -21,7 +21,7 @@ the rates and billing units shown by GenRouter's model catalog.
 
 ## Source and verification
 The public cabinet frontend at
-`https://genrouter.ru/dashboard/cabinet.js?v=50`, inspected on 2026-10-23,
+`https://genrouter.ru/dashboard/cabinet.js?v=50&ref=d97a170843`, inspected on 2026-10-23,
 uses `input_micro_per_million`, `cached_input_micro_per_million`,
 `output_micro_per_million`, `media_micro_per_unit`, and `media_unit`.
 These are observed frontend fields, not a versioned API guarantee.

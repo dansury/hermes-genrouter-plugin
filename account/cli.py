@@ -6,7 +6,7 @@ import json
 import subprocess
 import sys
 
-from .client import Client, GenRouterError, PORTAL, redact
+from .client import Client, GenRouterError, referral_url, redact
 
 
 from .reports import (CONSENT_TEXT, capture, safe_capture, load_report, pending, render,
@@ -153,7 +153,8 @@ def confirmation(text, confirmed=False):
 def signup(client, args):
     nickname = args.nickname or input("GenRouter nickname: ").strip()
     email = args.email or input("Email address: ").strip()
-    confirmation(f"Create account {nickname}. Accept {PORTAL}/legal/offer and {PORTAL}/legal/privacy?", args.accept_terms)
+    confirmation(f"Create account {nickname}. Accept {referral_url('/legal/offer')} and "
+                 f"{referral_url('/legal/privacy')}?", args.accept_terms)
     password = hidden("New password (at least 8 characters, a letter and a digit): ")
     if password != hidden("Repeat password: "):
         raise ValueError("Passwords do not match")

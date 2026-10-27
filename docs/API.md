@@ -31,7 +31,7 @@ verification. The plugin never bypasses CSRF.
 
 ## Referral attribution
 
-Public GenRouter links use `https://genrouter.ru/?ref=d97a170843`. The landing server sets a secure, same-site `linali_ref` cookie for this referral (observed on 2026-10-26). Before a new account registration, the client supplies that cookie for `genrouter.ru` and `/`; it does not add referral fields to account JSON or API endpoint URLs. Login and already-created accounts are not reassigned. The server decides whether attribution is eligible; account creation is never performed just to test it.
+Public GenRouter links use `https://genrouter.ru/?ref=d97a170843`; legal and dashboard links preserve their paths and append the same `ref` query. The landing server sets a secure, same-site `linali_ref` cookie for this referral (observed on 2026-10-26). Before a new account registration, the client supplies that cookie for `genrouter.ru` and `/`; it does not add referral fields to account JSON or API endpoint URLs. Login and already-created accounts are not reassigned. The server decides whether attribution is eligible; account creation is never performed just to test it.
 
 ## Registration recovery
 

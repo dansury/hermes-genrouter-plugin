@@ -11,7 +11,8 @@ from urllib.error import HTTPError
 
 from account import register
 from account.cli import execute, setup_parser
-from account.client import Client, GenRouterError, NoRedirects, safe_key, usd_to_micro
+from account.client import (Client, GenRouterError, NoRedirects, REFERRAL_CODE,
+                            REFERRAL_URL, referral_url, safe_key, usd_to_micro)
 from account.storage import SecretStore
 
 
@@ -66,6 +67,18 @@ class ClientTests(unittest.TestCase):
         request = Request("https://genrouter.ru/dashboard/api/auth/register")
         client.jar.add_cookie_header(request)
         self.assertIn("linali_ref=d97a170843", request.get_header("Cookie"))
+
+    def test_referral_links_preserve_destination_and_reject_external_hosts(self):
+        self.assertEqual(REFERRAL_CODE, "d97a170843")
+        self.assertEqual(REFERRAL_URL, "https://genrouter.ru/?ref=d97a170843")
+        self.assertEqual(referral_url(), REFERRAL_URL)
+        self.assertEqual(referral_url("/legal/offer"),
+                         "https://genrouter.ru/legal/offer?ref=d97a170843")
+        self.assertEqual(referral_url("/dashboard/cabinet.js?v=50"),
+                         "https://genrouter.ru/dashboard/cabinet.js?v=50&ref=d97a170843")
+        for path in ("//attacker.example/path", "https://attacker.example/path", "/../path"):
+            with self.assertRaises(ValueError):
+                referral_url(path)
 
     def test_email_confirmation_is_separate(self):
         client = RecordedClient()
