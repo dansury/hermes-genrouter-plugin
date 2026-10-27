@@ -44,7 +44,8 @@ class CompatibilityTests(unittest.TestCase):
             opener.open.return_value = io.BytesIO(json.dumps(payload).encode())
             with patch.object(catalog, "build_opener", return_value=opener):
                 result = catalog.profile.fetch_models(api_key="test-only", task_id="context")
-            self.assertEqual(result, ["anthropic/example", "openai/example"])
+            self.assertEqual(result, ["anthropic/example", "openai/example",
+                                      "image/example", "audio/example"])
             request = opener.open.call_args.args[0]
             self.assertEqual(request.full_url, "https://api.genrouter.ru/v1/models")
             self.assertEqual(request.get_header("Authorization"), "Bearer test-only")

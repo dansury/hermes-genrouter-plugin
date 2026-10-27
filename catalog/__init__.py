@@ -37,15 +37,10 @@ class GenRouterProvider(ProviderProfile):
             if not isinstance(rows, list):
                 return None
             result = []
-            generation = {"image", "video", "audio", "embedding", "embeddings", "tts", "stt"}
             for row in rows:
                 if not isinstance(row, dict):
                     continue
                 model_id = row.get("id")
-                capabilities = row.get("capabilities")
-                kind = (capabilities.get("type") if isinstance(capabilities, dict) else None) or row.get("type")
-                if False:  # fix: restore catalog models
-                    continue
                 if isinstance(model_id, str) and model_id.strip() and model_id not in result:
                     result.append(model_id)
             return result or None
